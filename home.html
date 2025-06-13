@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Yashsva Weekly Holiday Calendar</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      padding: 20px;
+      background-color: #ffffff;
+      color: #333;
+    }
+    h2 {
+      margin-bottom: 1rem;
+    }
+    label {
+      margin-right: 8px;
+    }
+    select {
+      padding: 6px 10px;
+      font-size: 14px;
+      margin-bottom: 20px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+    }
+    td {
+      border: 1px solid #ccc;
+      padding: 10px;
+      vertical-align: top;
+    }
+    .light-green {
+      background-color: #b9d4b9;
+    }
+    .dark-green {
+      background-color: #61a561;
+      font-weight: bold;
+    }
+    .holiday {
+      font-size: 13px;
+      margin-top: 5px;
+    }
+    strong {
+      display: block;
+      margin-bottom: 5px;
+    }
+  </style>
+</head>
+<body>
+  <h2>Weekly Holiday Calendar</h2>
+
+  <label for="country">Country:</label>
+  <select id="country"></select>
+
+  <label for="year">Year:</label>
+  <select id="year"></select>
+
+  <div id="calendar"></div>
+
+  <script>
+    const API_KEY = "myug5spwt2gTVkdgRMNFsfXGTnWCNV4M"; 
+    const calendarDiv = document.getElementById("calendar");
+    const countrySelect = document.getElementById("country");
+    const yearSelect = document.getElementById("year");
+
+    
+    for (let y = 2020; y <= 2030; y++) {
+      const opt = document.createElement("option");
+      opt.value = y;
+      opt.textContent = y;
+      if (y === new Date().getFullYear()) opt.selected = true;
+      yearSelect.appendChild(opt);
+    }
+
+    
+    async function loadCountries() {
+      const res = await fetch(`https://calendarific.com/api/v2/countries?api_key=${API_KEY}`);
+      const data = await res.json();
+      const countries = data.response.countries;
+
+      countries.forEach(country => {
+        const option = document.createElement("option");
+        option.value = country['iso-3166'];
+        option.textContent = country.country_name;
+        countrySelect.appendChild(option);
+      });
+
+      updateCalendar();
+    }
+
+    
+    function getWeekNumber(dateStr) {
+      const date = new Date(dateStr);
+      const start = new Date(date.getFullYear(), 0, 1);
+      const diff = date - start;
+      const day = start.getDay();
+      return Math.ceil((diff / (1000 * 60 * 60 * 24) + day + 1) / 7);
+    }
+
+    async function updateCalendar() {
+      const country = countrySelect.value;
+      const year = parseInt(yearSelect.value);
+      if (!country) return;
+
+      const url = `https://calendarific.com/api/v2/holidays?api_key=${API_KEY}&country=${country}&year=${year}`;
+      const res = await fetch(url);
+      const data = await res.json();
+
+      const holidays = data.response.holidays;
+      const weekMap = {};
+
+      holidays.forEach(h => {
+        const week = getWeekNumber(h.date.iso);
+        if (!weekMap[week]) weekMap[week] = [];
+        weekMap[week].push(h);
+      });
+
+      renderCalendar(weekMap);
+    }
+
+    function renderCalendar(weekMap) {
+      let html = "<table><tr>";
+      for (let week = 1; week <= 52; week++) {
+        const holidays = weekMap[week] || [];
+        const className = holidays.length === 1 ? "light-green" :
+                          holidays.length > 1 ? "dark-green" : "";
+
+        html += `<td class="${className}">
+                  <strong>Week ${week}</strong>`;
+        holidays.forEach(h => {
+          html += `<div class="holiday">${h.date.iso} — ${h.name}</div>`;
+        });
+        html += "</td>";
+
+        if (week % 4 === 0) html += "</tr><tr>";
+      }
+      html += "</tr></table>";
+      calendarDiv.innerHTML = html;
+    }
+
+    countrySelect.addEventListener("change", updateCalendar);
+    yearSelect.addEventListener("change", updateCalendar);
+
+    loadCountries();
+  </script>
+</body>
+</html>
