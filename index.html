@@ -1,71 +1,119 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Yashsva Weekly Holiday Calendar</title>
+  <meta charset="UTF-8" />
+  <title>Smart Holiday Calendar</title>
   <style>
     body {
-      font-family: sans-serif;
-      padding: 20px;
-      background-color: #ffffff;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      margin: 0;
+      padding: 0;
+      background: #f4f6f9;
       color: #333;
     }
-    h2 {
-      margin-bottom: 1rem;
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 1rem;
+      background: #ffffff;
+      border-bottom: 1px solid #e1e4e8;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.05);
     }
-    label {
-      margin-right: 8px;
+    .header select, .header button {
+      padding: 0.5rem 0.75rem;
+      font-size: 1rem;
+      border: 1px solid #d1d5da;
+      border-radius: 6px;
+      background: #ffffff;
+      cursor: pointer;
+      transition: background-color 0.3s;
     }
-    select {
-      padding: 6px 10px;
-      font-size: 14px;
-      margin-bottom: 20px;
+    .header button:hover, .header select:hover {
+      background-color: #f0f3f6;
     }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-top: 10px;
+    #calendar-grid {
+      display: grid;
+      padding: 1rem;
+      background: #ffffff;
+      gap: 1rem;
     }
-    td {
-      border: 1px solid #ccc;
-      padding: 10px;
-      vertical-align: top;
+    .day-cell, .month-cell {
+      border: 1px solid #e1e4e8;
+      padding: 1rem;
+      background: #ffffff;
+      min-height: 100px;
+      border-radius: 10px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+      transition: transform 0.2s;
     }
-    .light-green {
-      background-color: #b9d4b9;
-    }
-    .dark-green {
-      background-color: #61a561;
-      font-weight: bold;
+    .day-cell:hover, .month-cell:hover {
+      transform: scale(1.02);
     }
     .holiday {
-      font-size: 13px;
-      margin-top: 5px;
+      margin-top: 0.5rem;
+      font-size: 0.85rem;
+      padding: 0.4rem 0.6rem;
+      border-radius: 6px;
+      background: #e0f3ff;
+      color: #0366d6;
+      font-weight: 500;
     }
-    strong {
-      display: block;
-      margin-bottom: 5px;
+    .multiple {
+      background: #ffebcc;
+      color: #8a4b00;
+    }
+    .week-light-green {
+      background-color: #eefae3 !important;
+    }
+    .week-dark-green {
+      background-color: #c9f7b7 !important;
+    }
+    .month-title {
+      grid-column: span 7;
+      text-align: center;
+      font-size: 1.5rem;
+      margin: 1rem 0;
+    }
+    .weekdays {
+      display: contents;
+    }
+    .weekday {
+      font-weight: bold;
+      text-align: center;
     }
   </style>
 </head>
 <body>
-  <h2>Weekly Holiday Calendar</h2>
+  <div class="header">
+    <div>
+      <button id="prev">&#8592;</button>
+      <button id="next">&#8594;</button>
+      <select id="view-mode">
+        <option value="month" selected>Monthly View</option>
+        <option value="week">Weekly View</option>
+        <option value="quarter">Quarterly View</option>
+      </select>
+    </div>
+    <div>
+      <select id="country"></select>
+      <select id="year"></select>
+    </div>
+  </div>
 
-  <label for="country">Country:</label>
-  <select id="country"></select>
-
-  <label for="year">Year:</label>
-  <select id="year"></select>
-
-  <div id="calendar"></div>
+  <div id="calendar-grid">Loading...</div>
 
   <script>
-    const API_KEY = "myug5spwt2gTVkdgRMNFsfXGTnWCNV4M"; 
-    const calendarDiv = document.getElementById("calendar");
+    const API_KEY = "myug5spwt2gTVkdgRMNFsfXGTnWCNV4M"; // Add your Calendarific API Key here
+    const calendarGrid = document.getElementById("calendar-grid");
     const countrySelect = document.getElementById("country");
     const yearSelect = document.getElementById("year");
+    const viewMode = document.getElementById("view-mode");
+    const prevBtn = document.getElementById("prev");
+    const nextBtn = document.getElementById("next");
 
-    
+    let currentDate = new Date();
+
     for (let y = 2020; y <= 2030; y++) {
       const opt = document.createElement("option");
       opt.value = y;
@@ -74,74 +122,196 @@
       yearSelect.appendChild(opt);
     }
 
-    
     async function loadCountries() {
       const res = await fetch(`https://calendarific.com/api/v2/countries?api_key=${API_KEY}`);
       const data = await res.json();
-      const countries = data.response.countries;
+      data.response.countries.forEach(c => {
+        const opt = document.createElement("option");
+        opt.value = c["iso-3166"];
+        opt.textContent = c.country_name;
+        if (c["iso-3166"] === "IN") opt.selected = true;
+        countrySelect.appendChild(opt);
+      });
+      renderCalendar();
+    }
 
-      countries.forEach(country => {
-        const option = document.createElement("option");
-        option.value = country['iso-3166'];
-        option.textContent = country.country_name;
-        countrySelect.appendChild(option);
+    function getWeekStart(date) {
+      const d = new Date(date);
+      const day = d.getDay();
+      const diff = d.getDate() - day;
+      return new Date(d.setDate(diff));
+    }
+
+    function renderMonthView(holidays) {
+      calendarGrid.innerHTML = "";
+      calendarGrid.style.gridTemplateColumns = `repeat(7, 1fr)`;
+
+      const year = currentDate.getFullYear();
+      const month = currentDate.getMonth();
+      const start = new Date(year, month, 1);
+      const end = new Date(year, month + 1, 0);
+
+      const title = document.createElement("div");
+      title.className = "month-title";
+      title.textContent = `${start.toLocaleString("default", { month: "long" })} ${year}`;
+      calendarGrid.appendChild(title);
+
+      // Weekday headers
+      const weekdays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+      weekdays.forEach(day => {
+        const div = document.createElement("div");
+        div.className = "weekday";
+        div.textContent = day;
+        calendarGrid.appendChild(div);
       });
 
-      updateCalendar();
-    }
-
-    
-    function getWeekNumber(dateStr) {
-      const date = new Date(dateStr);
-      const start = new Date(date.getFullYear(), 0, 1);
-      const diff = date - start;
-      const day = start.getDay();
-      return Math.ceil((diff / (1000 * 60 * 60 * 24) + day + 1) / 7);
-    }
-
-    async function updateCalendar() {
-      const country = countrySelect.value;
-      const year = parseInt(yearSelect.value);
-      if (!country) return;
-
-      const url = `https://calendarific.com/api/v2/holidays?api_key=${API_KEY}&country=${country}&year=${year}`;
-      const res = await fetch(url);
-      const data = await res.json();
-
-      const holidays = data.response.holidays;
-      const weekMap = {};
-
-      holidays.forEach(h => {
-        const week = getWeekNumber(h.date.iso);
-        if (!weekMap[week]) weekMap[week] = [];
-        weekMap[week].push(h);
-      });
-
-      renderCalendar(weekMap);
-    }
-
-    function renderCalendar(weekMap) {
-      let html = "<table><tr>";
-      for (let week = 1; week <= 52; week++) {
-        const holidays = weekMap[week] || [];
-        const className = holidays.length === 1 ? "light-green" :
-                          holidays.length > 1 ? "dark-green" : "";
-
-        html += `<td class="${className}">
-                  <strong>Week ${week}</strong>`;
-        holidays.forEach(h => {
-          html += `<div class="holiday">${h.date.iso} — ${h.name}</div>`;
-        });
-        html += "</td>";
-
-        if (week % 4 === 0) html += "</tr><tr>";
+      const days = [];
+      const offset = start.getDay();
+      for (let i = 0; i < offset; i++) {
+        days.push(null); // Empty cells
       }
-      html += "</tr></table>";
-      calendarDiv.innerHTML = html;
+      for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+        days.push(new Date(d));
+      }
+
+      for (let i = 0; i < days.length; i++) {
+        const day = days[i];
+        const cell = document.createElement("div");
+        cell.className = "day-cell";
+
+        if (day) {
+          const dayStr = day.toISOString().split("T")[0];
+          const dayHolidays = holidays.filter(h => h.date.iso === dayStr);
+
+          cell.innerHTML = `<strong>${day.getDate()}</strong>`;
+
+          dayHolidays.forEach(h => {
+            const div = document.createElement("div");
+            div.className = "holiday" + (dayHolidays.length > 1 ? " multiple" : "");
+            div.textContent = h.name;
+            cell.appendChild(div);
+          });
+        } else {
+          cell.innerHTML = "";
+        }
+
+        // Color based on holiday count
+        const weekIndex = Math.floor(i / 7);
+        const weekDates = days.slice(weekIndex * 7, (weekIndex + 1) * 7).filter(Boolean);
+        const weekHolidayCount = weekDates.reduce((count, d) => {
+          const dStr = d.toISOString().split("T")[0];
+          return count + holidays.filter(h => h.date.iso === dStr).length;
+        }, 0);
+
+        if (weekHolidayCount > 1) {
+          cell.classList.add("week-dark-green");
+        } else if (weekHolidayCount === 1) {
+          cell.classList.add("week-light-green");
+        }
+
+        calendarGrid.appendChild(cell);
+      }
     }
 
-    countrySelect.addEventListener("change", updateCalendar);
-    yearSelect.addEventListener("change", updateCalendar);
+    function renderWeekView(holidays) {
+      const weekStart = getWeekStart(new Date(currentDate));
+      const week = Array.from({ length: 7 }, (_, i) => new Date(weekStart.getTime() + i * 86400000));
+
+      calendarGrid.innerHTML = "";
+      calendarGrid.style.gridTemplateColumns = `repeat(7, 1fr)`;
+
+      const weekHolidayCount = week.reduce((count, day) => {
+        const dateStr = day.toISOString().split("T")[0];
+        return count + holidays.filter(h => h.date.iso === dateStr).length;
+      }, 0);
+
+      const weekClass = weekHolidayCount > 1 ? "week-dark-green" : weekHolidayCount === 1 ? "week-light-green" : "";
+
+      week.forEach(day => {
+        const dayStr = day.toISOString().split("T")[0];
+        const dayHolidays = holidays.filter(h => h.date.iso === dayStr);
+        const cell = document.createElement("div");
+        cell.className = `day-cell ${weekClass}`;
+        cell.innerHTML = `<strong>${day.toDateString()}</strong>`;
+        dayHolidays.forEach(h => {
+          const div = document.createElement("div");
+          div.className = "holiday" + (dayHolidays.length > 1 ? " multiple" : "");
+          div.textContent = h.name;
+          cell.appendChild(div);
+        });
+        calendarGrid.appendChild(cell);
+      });
+    }
+
+    function renderQuarterView(holidays) {
+      calendarGrid.innerHTML = "";
+      calendarGrid.style.gridTemplateColumns = `repeat(3, 1fr)`;
+      const quarterMonths = [0, 1, 2].map(i => new Date(currentDate.getFullYear(), currentDate.getMonth() + i, 1));
+      quarterMonths.forEach(monthStart => {
+        const cell = document.createElement("div");
+        cell.className = "month-cell";
+        cell.innerHTML = `<strong>${monthStart.toLocaleString("default", { month: "long" })}</strong>`;
+        holidays.forEach(h => {
+          const hDate = new Date(h.date.iso);
+          if (hDate.getMonth() === monthStart.getMonth()) {
+            const div = document.createElement("div");
+            div.className = "holiday";
+            div.textContent = `${hDate.getDate()}: ${h.name}`;
+            cell.appendChild(div);
+          }
+        });
+        calendarGrid.appendChild(cell);
+      });
+    }
+
+    async function fetchHolidays(year, country) {
+      const res = await fetch(`https://calendarific.com/api/v2/holidays?api_key=${API_KEY}&country=${country}&year=${year}`);
+      const data = await res.json();
+      return data.response.holidays || [];
+    }
+
+    async function renderCalendar() {
+      const country = countrySelect.value;
+      const year = currentDate.getFullYear();
+      const holidays = await fetchHolidays(year, country);
+      const view = viewMode.value;
+      if (view === "week") renderWeekView(holidays);
+      else if (view === "quarter") renderQuarterView(holidays);
+      else renderMonthView(holidays);
+    }
+
+    viewMode.addEventListener("change", renderCalendar);
+    countrySelect.addEventListener("change", renderCalendar);
+
+    yearSelect.addEventListener("change", () => {
+      const newYear = parseInt(yearSelect.value);
+      currentDate.setFullYear(newYear);
+      renderCalendar();
+    });
+
+    prevBtn.addEventListener("click", () => {
+      if (viewMode.value === "week") {
+        currentDate.setDate(currentDate.getDate() - 7);
+      } else if (viewMode.value === "quarter") {
+        currentDate.setMonth(currentDate.getMonth() - 3);
+      } else {
+        currentDate.setMonth(currentDate.getMonth() - 1);
+      }
+      yearSelect.value = currentDate.getFullYear();
+      renderCalendar();
+    });
+
+    nextBtn.addEventListener("click", () => {
+      if (viewMode.value === "week") {
+        currentDate.setDate(currentDate.getDate() + 7);
+      } else if (viewMode.value === "quarter") {
+        currentDate.setMonth(currentDate.getMonth() + 3);
+      } else {
+        currentDate.setMonth(currentDate.getMonth() + 1);
+      }
+      yearSelect.value = currentDate.getFullYear();
+      renderCalendar();
+    });
 
     loadCountries();
   </script>
